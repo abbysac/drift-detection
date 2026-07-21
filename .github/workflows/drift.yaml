@@ -1,25 +1,80 @@
-name: Terraform
+name: Terraform Drift Detection
+
 on:
   push:
     branches:
       - main
+
+  schedule:
+    # Run every day at 02:00 UTC
+    - cron: '0 2 * * *'
+
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   terraform:
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      AWS_REGION: us-east-1
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::224761220970:role/GitHubActionsOIDCRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS Credentials
+        run: aws sts get-caller-identity
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8
+
       - name: Verify Terraform
-        run: |
-          which terraform
-          terraform version
+        run: terraform version
+
       - name: Terraform Init
-        working-directory: terraform
         run: terraform init
 
-      - name: Terraform Plan
-        working-directory: terraform
-        run: terraform plan -detailed-exitcode
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan (Drift Detection)
+        id: plan
+        run: |
+          set +e
+          terraform plan -detailed-exitcode -out=tfplan
+          EXIT_CODE=$?
+
+          echo "exitcode=$EXIT_CODE" >> $GITHUB_OUTPUT
+
+          if [ "$EXIT_CODE" -eq 1 ]; then
+            echo "Terraform failed."
+            exit 1
+          fi
+
+          exit 0
+
+      - name: Drift Detected
+        if: steps.plan.outputs.exitcode == '2'
+        run: |
+          echo "Infrastructure drift detected."
+
+      - name: No Drift
+        if: steps.plan.outputs.exitcode == '0'
+        run: |
+          echo "No infrastructure drift detected."
