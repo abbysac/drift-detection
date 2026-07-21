@@ -1,11 +1,17 @@
 on:
   schedule:
-    - cron: "0 */2 * * *" # every 2 hours
+    - cron: "0 */6 * * *"
+
 jobs:
-  drift-check:
+  drift:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-            terraform_version: 1.15.8
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - run: terraform init
+
+      - name: Check Drift
+        run: terraform plan -detailed-exitcode
