@@ -15,11 +15,6 @@ permissions:
 jobs:
   terraform:
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: terraform
-
     env:
       AWS_REGION: us-east-1
 
@@ -41,32 +36,32 @@ jobs:
       role-to-assume: arn:aws:iam::224761220970:role/GitHubActionsOIDCRole
       aws-region: us-east-1
     
-      - name: Debug GitHub Context
-        run: |
-          echo "Repository=${{ github.repository }}"
-          echo "Ref=${{ github.ref }}"
-          echo "Ref Name=${{ github.ref_name }}"
-          echo "Event=${{ github.event_name }}"
-          echo "Actor=${{ github.actor }}"
+  - name: Debug GitHub Context
+    run: |
+        echo "Repository=${{ github.repository }}"
+        echo "Ref=${{ github.ref }}"
+        echo "Ref Name=${{ github.ref_name }}"
+        echo "Event=${{ github.event_name }}"
+        echo "Actor=${{ github.actor }}"
 
-      - name: Verify AWS Credentials
-        run: aws sts get-caller-identity
+  - name: Verify AWS Credentials
+    run: aws sts get-caller-identity
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.15.8
+  - name: Setup Terraform
+    uses: hashicorp/setup-terraform@v3
+    with:
+        terraform_version: 1.15.8
 
-      - name: Terraform Init
-        run: terraform init
+  - name: Terraform Init
+    run: terraform init
 
-      - name: Terraform Validate
-        run: terraform validate
+  - name: Terraform Validate
+    run: terraform validate
 
-      - name: Terraform Plan
-        id: plan
-        shell: bash
-        run: |
+  - name: Terraform Plan
+    id: plan
+    shell: bash
+    run: |
           set +e
           terraform plan -detailed-exitcode -out=tfplan
           EXIT_CODE=$?
@@ -79,10 +74,10 @@ jobs:
 
           exit 0
 
-      - name: Drift Detected
-        if: steps.plan.outputs.exitcode == '2'
-        run: echo "Infrastructure drift detected."
+  - name: Drift Detected
+    if: steps.plan.outputs.exitcode == '2'
+    run: echo "Infrastructure drift detected."
 
-      - name: No Drift
-        if: steps.plan.outputs.exitcode == '0'
-        run: echo "No infrastructure drift detected."
+  - name: No Drift
+    if: steps.plan.outputs.exitcode == '0'
+    run: echo "No infrastructure drift detected."
