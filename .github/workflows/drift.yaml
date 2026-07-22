@@ -1,10 +1,10 @@
 name: "Terraform Drift Detection"
 
 on:
-  schedule:
-    # Runs at 00:00 UTC every single day (Adjust to your preferences)
-    - cron: '0 0 * * *'
-  workflow_dispatch: # Allows manual execution via the GitHub Actions UI
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Keeps the option to run it manually via the GitHub UI
 
 permissions:
   id-token: write   # Required for secure OIDC cloud authentication
@@ -15,6 +15,7 @@ jobs:
   drift-check:
     name: "Check Infrastructure Drift"
     runs-on: ubuntu-latest
+<<<<<<< HEAD
     
     # Optional env adjustments if passing secrets explicitly
     env:
@@ -38,10 +39,49 @@ jobs:
         with:
           terraform_version: "1.7.0" # Match your project version
           terraform_wrapper: false   # Essential for -detailed-exitcode to work properly
+=======
+    env:
+      AWS_REGION: us-east-1
 
-      - name: Terraform Init
-        run: terraform init
+   steps:
+  - name: Checkout Repository
+    uses: actions/checkout@v4
 
+  - name: Debug GitHub Context
+    run: |
+      echo "Repository=${{ github.repository }}"
+      echo "Ref=${{ github.ref }}"
+      echo "Ref Name=${{ github.ref_name }}"
+      echo "Event=${{ github.event_name }}"
+      echo "Actor=${{ github.actor }}"
+
+  - name: Configure AWS Credentials
+    uses: aws-actions/configure-aws-credentials@v4
+    with:
+      role-to-assume: arn:aws:iam::224761220970:role/GitHubActionsOIDCRole
+      aws-region: us-east-1
+    
+  - name: Debug GitHub Context
+    run: |
+        echo "Repository=${{ github.repository }}"
+        echo "Ref=${{ github.ref }}"
+        echo "Ref Name=${{ github.ref_name }}"
+        echo "Event=${{ github.event_name }}"
+        echo "Actor=${{ github.actor }}"
+
+  - name: Verify AWS Credentials
+    run: aws sts get-caller-identity
+
+  - name: Setup Terraform
+    uses: hashicorp/setup-terraform@v3
+    with:
+        terraform_version: 1.15.8
+>>>>>>> c26a8c6292201842d748b17a1990eeee1ddea07d
+
+  - name: Terraform Init
+    run: terraform init
+
+<<<<<<< HEAD
       # 3. Execute Plan and catch the detailed exit code
       - name: Check for Drift
         id: plan
@@ -50,6 +90,17 @@ jobs:
           set +e 
           
           terraform plan -detailed-exitcode -no-color -input=false > plan_output.txt
+=======
+  - name: Terraform Validate
+    run: terraform validate
+
+  - name: Terraform Plan
+    id: plan
+    shell: bash
+    run: |
+          set +e
+          terraform plan -detailed-exitcode -out=tfplan
+>>>>>>> c26a8c6292201842d748b17a1990eeee1ddea07d
           EXIT_CODE=$?
           
           # Re-enable exit on error
@@ -69,6 +120,7 @@ jobs:
             echo "No drift detected. Infrastructure is perfectly synced."
           fi
 
+<<<<<<< HEAD
       # 4. Automatically create a GitHub Issue if drift is detected
       - name: Create Drift Alert Issue
         if: env.DRIFT_DETECTED == 'true'
@@ -96,3 +148,14 @@ jobs:
               body: body,
               labels: ['drift', 'automated-alert']
             });
+=======
+          exit 0
+
+  - name: Drift Detected
+    if: steps.plan.outputs.exitcode == '2'
+    run: echo "Infrastructure drift detected."
+
+  - name: No Drift
+    if: steps.plan.outputs.exitcode == '0'
+    run: echo "No infrastructure drift detected."
+>>>>>>> c26a8c6292201842d748b17a1990eeee1ddea07d
