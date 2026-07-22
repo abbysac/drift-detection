@@ -4,158 +4,76 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # Keeps the option to run it manually via the GitHub UI
+  workflow_dispatch:
 
 permissions:
-  id-token: write   # Required for secure OIDC cloud authentication
-  contents: read    # Required to check out your repository code
-  issues: write     # Required to automatically open tracking issues
+  id-token: write      
+  contents: read       
+  issues: write        
 
 jobs:
   drift-check:
-    name: "Check Infrastructure Drift"
+    name: "Detect Infrastructure Drift"
     runs-on: ubuntu-latest
-<<<<<<< HEAD
     
-    # Optional env adjustments if passing secrets explicitly
-    env:
-      TF_IN_AUTOMATION: "true"
+    defaults:
+      run:
+        working-directory: ./terraform
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 1. Authenticate to your Cloud Provider securely via OIDC
-      # Replace this step with Azure login or GCP auth if not using AWS
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::224761220970:role/GitHubActionsOIDCRole
+          role-to-assume: arn:aws:iam::123456789012:role/github-actions-terraform-role
           aws-region: us-east-1
 
-      # 2. Install Terraform (CRITICAL: Disable the wrapper to preserve exit codes)
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.7.0" # Match your project version
-          terraform_wrapper: false   # Essential for -detailed-exitcode to work properly
-=======
-    env:
-      AWS_REGION: us-east-1
+          terraform_version: 1.7.0
+          terraform_wrapper: false
 
-   steps:
-  - name: Checkout Repository
-    uses: actions/checkout@v4
+      - name: Terraform Init
+        run: terraform init
 
-  - name: Debug GitHub Context
-    run: |
-      echo "Repository=${{ github.repository }}"
-      echo "Ref=${{ github.ref }}"
-      echo "Ref Name=${{ github.ref_name }}"
-      echo "Event=${{ github.event_name }}"
-      echo "Actor=${{ github.actor }}"
-
-  - name: Configure AWS Credentials
-    uses: aws-actions/configure-aws-credentials@v4
-    with:
-      role-to-assume: arn:aws:iam::224761220970:role/GitHubActionsOIDCRole
-      aws-region: us-east-1
-    
-  - name: Debug GitHub Context
-    run: |
-        echo "Repository=${{ github.repository }}"
-        echo "Ref=${{ github.ref }}"
-        echo "Ref Name=${{ github.ref_name }}"
-        echo "Event=${{ github.event_name }}"
-        echo "Actor=${{ github.actor }}"
-
-  - name: Verify AWS Credentials
-    run: aws sts get-caller-identity
-
-  - name: Setup Terraform
-    uses: hashicorp/setup-terraform@v3
-    with:
-        terraform_version: 1.15.8
->>>>>>> c26a8c6292201842d748b17a1990eeee1ddea07d
-
-  - name: Terraform Init
-    run: terraform init
-
-<<<<<<< HEAD
-      # 3. Execute Plan and catch the detailed exit code
-      - name: Check for Drift
-        id: plan
+      - name: Run Drift Check
+        id: drift
         run: |
-          # Disable 'exit on error' temporarily so the script doesn't fail on code 2
-          set +e 
-          
-          terraform plan -detailed-exitcode -no-color -input=false > plan_output.txt
-=======
-  - name: Terraform Validate
-    run: terraform validate
-
-  - name: Terraform Plan
-    id: plan
-    shell: bash
-    run: |
           set +e
-          terraform plan -detailed-exitcode -out=tfplan
->>>>>>> c26a8c6292201842d748b17a1990eeee1ddea07d
-          EXIT_CODE=$?
+          terraform plan -detailed-exitcode -no-color -out=tfplan
+          TF_EXIT_CODE=$?
+          echo "exit_code=$TF_EXIT_CODE" >> $GITHUB_OUTPUT
           
-          # Re-enable exit on error
-          set -e 
-          
-          # Save outputs for subsequent steps
-          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
-          cat plan_output.txt
-          
-          if [ $EXIT_CODE -eq 2 ]; then
-            echo "DRIFT_DETECTED=true" >> $GITHUB_ENV
-            echo "Drift has been detected in the cloud environment!"
-          elif [ $EXIT_CODE -eq 1 ]; then
-            echo "Terraform plan failed with an execution error."
-            exit 1
+          if [ $TF_EXIT_CODE -eq 0 ]; then
+            echo "SUCCESS: No drift detected."
+            exit 0
+          elif [ $TF_EXIT_CODE -eq 2 ]; then
+            echo "WARNING: Infrastructure drift detected!"
+            exit 0
           else
-            echo "No drift detected. Infrastructure is perfectly synced."
+            echo "ERROR: Terraform plan failed to execute correctly."
+            exit $TF_EXIT_CODE
           fi
 
-<<<<<<< HEAD
-      # 4. Automatically create a GitHub Issue if drift is detected
-      - name: Create Drift Alert Issue
-        if: env.DRIFT_DETECTED == 'true'
+      - name: Create GitHub Issue on Drift
+        if: steps.drift.outputs.exit_code == '2'
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            const planLog = fs.readFileSync('plan_output.txt', 'utf8');
-            const truncatedLog = planLog.length > 6000 ? planLog.substring(0, 6000) + '\n...[Output Truncated]...' : planLog;
+            const issueTitle = "⚠️ Terraform Drift Detected in Main Branch";
+            const issueBody = `Drift has been detected in the cloud infrastructure compared to the main branch configuration.
             
-            const body = `### Infrastructure Drift Detected
-            The scheduled drift detection job found variations between your production environment and code.
+            **Workflow Run**: https://github.com{context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
             
-            #### Terraform Plan Output:
-            \`\`\`terraform
-            ${truncatedLog}
-            \`\`\`
-            
-            Please review the changes and run a manual deployment or remediate manual console modifications.`;
+            Please check the workflow output log above to identify which cloud components diverged. Run a manual \`terraform apply\` from an approved pipeline to resolve this drift.`;
             
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: 'Alert: Terraform Infrastructure Drift Detected',
-              body: body,
-              labels: ['drift', 'automated-alert']
+              title: issueTitle,
+              body: issueBody,
+              labels: ['bug', 'drift-detected']
             });
-=======
-          exit 0
-
-  - name: Drift Detected
-    if: steps.plan.outputs.exitcode == '2'
-    run: echo "Infrastructure drift detected."
-
-  - name: No Drift
-    if: steps.plan.outputs.exitcode == '0'
-    run: echo "No infrastructure drift detected."
->>>>>>> c26a8c6292201842d748b17a1990eeee1ddea07d
