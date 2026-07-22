@@ -42,6 +42,7 @@ jobs:
           echo "Ref Name=${{ github.ref_name }}"
           echo "Event=${{ github.event_name }}"
           echo "Actor=${{ github.actor }}"
+     
       - name: Verify AWS Credentials
         run: aws sts get-caller-identity
       - name: Setup Terraform
