@@ -29,6 +29,14 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+     
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::224761220970:role/GitHubActionsOIDCRole
+          aws-region: us-east-1
+    
       - name: Debug GitHub Context
         run: |
           echo "Repository=${{ github.repository }}"
@@ -36,12 +44,6 @@ jobs:
           echo "Ref Name=${{ github.ref_name }}"
           echo "Event=${{ github.event_name }}"
           echo "Actor=${{ github.actor }}"
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::224761220970:role/GitHubActionsOIDCRole
-          aws-region: us-east-1
 
       - name: Verify AWS Credentials
         run: aws sts get-caller-identity
