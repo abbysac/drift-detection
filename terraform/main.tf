@@ -2,17 +2,17 @@ resource "aws_s3_bucket" "example" {
   bucket = "my-example-bucket-drift-detection"
 }
 
-resource "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
+# resource "aws_iam_openid_connect_provider" "github" {
+#   url = "https://token.actions.githubusercontent.com"
 
-  client_id_list = [
-    "sts.amazonaws.com"
-  ]
+#   client_id_list = [
+#     "sts.amazonaws.com"
+#   ]
 
-  thumbprint_list = [
-    "6938fd4d98bab03faadb97b34396831e3780aea1"
-  ]
-}
+#   thumbprint_list = [
+#     "6938fd4d98bab03faadb97b34396831e3780aea1"
+#   ]
+# }
 
 resource "aws_iam_role" "github_actions_role" {
   name = "github-actions-oidc-role"
@@ -23,7 +23,7 @@ resource "aws_iam_role" "github_actions_role" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = aws_iam_openid_connect_provider.github.arn
+          Federated = "arn:aws:iam::224761220970:oidc-provider/token.actions.githubusercontent.com"
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
