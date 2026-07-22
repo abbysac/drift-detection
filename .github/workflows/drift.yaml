@@ -35,9 +35,13 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::224761220970:role/GitHubActionsOIDCRole
           aws-region: us-east-1
+      - name: Dump GitHub Context
+        run: |
+          echo "Repository: ${{ github.repository }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Actor: ${{ github.actor }}"
       - name: Verify AWS Credentials
         run: aws sts get-caller-identity
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
