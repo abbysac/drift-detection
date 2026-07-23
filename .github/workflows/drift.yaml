@@ -9,51 +9,26 @@ permissions:
   contents: read
 
 jobs:
-  test-oidc:
+  debug:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
-      - name: Decode OIDC Token
-      shell: bash
-      env:
-        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-        ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-      run: |
-        TOKEN=$(curl -s \
-          -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value')
+      - uses: actions/checkout@v4
 
-      python3 <<'PY'
-    import base64
-    import json
-    import os
+      - name: Show GitHub Context
+        run: |
+          echo "Repository=${{ github.repository }}"
+          echo "Repository Owner=${{ github.repository_owner }}"
+          echo "Ref=${{ github.ref }}"
+          echo "Ref Name=${{ github.ref_name }}"
+          echo "Event=${{ github.event_name }}"
+          echo "Actor=${{ github.actor }}"
 
-    token = os.environ["TOKEN"]
-    payload = token.split(".")[1]
-    payload += "=" * (-len(payload) % 4)
+      - name: Get OIDC Token
+        run: |
+          TOKEN=$(curl -s \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
+            | jq -r '.value')
 
-    decoded = json.loads(base64.urlsafe_b64decode(payload))
-    print(json.dumps(decoded, indent=2))
-    PY
-      env:
-        TOKEN: ${{ env.TOKEN }}
-              
-      # - name: Debug OIDC token
-      #   run: |
-      #     echo "OIDC token claims:"
-      #     echo "URL: $ACTIONS_ID_TOKEN_REQUEST_URL"
-      #     echo "TOKEN: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+set}"
-      #     curl -s "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
-      #       -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" | jq -r '.claims'
-
-      # - name: Configure AWS credentials via OIDC
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: arn:aws:iam::224761220970:role/github-actions-oidc-role
-      #     aws-region: us-east-1
-
-      # - name: Verify caller identity
-      #   run: aws sts get-caller-identity
+          echo "Token received: ${#TOKEN} characters"
