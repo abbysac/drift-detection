@@ -43,9 +43,9 @@
 
       PAYLOAD=$(echo "$TOKEN" | cut -d '.' -f2)
 
-    python3 -c "
-      import base64, json
-      payload='$PAYLOAD'
-      payload += '=' * (-len(payload) % 4)
-      print(json.dumps(json.loads(base64.urlsafe_b64decode(payload)), indent=2))
-      "
+      python3 -c "
+        import base64, json
+        payload='$PAYLOAD'
+        payload += '=' * (-len(payload) % 4)
+        print(json.dumps(json.loads(base64.urlsafe_b64decode(payload)), indent=2))
+        "
