@@ -17,29 +17,29 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Decode OIDC Token
-        shell: bash
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-        run: |
-          TOKEN=$(curl -s \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value')
+      shell: bash
+      env:
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+        ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+      run: |
+        TOKEN=$(curl -s \
+          -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value')
 
-          python3 <<'PY'
-            import base64
-            import json
-            import os
+        python3 <<'PY'
+    import base64
+    import json
+    import os
 
-            token = os.environ["TOKEN"]
-            payload = token.split(".")[1]
-            payload += "=" * (-len(payload) % 4)
+    token = os.environ["TOKEN"]
+    payload = token.split(".")[1]
+    payload += "=" * (-len(payload) % 4)
 
-            decoded = json.loads(base64.urlsafe_b64decode(payload))
-            print(json.dumps(decoded, indent=2))
-            PY
-              env:
-                TOKEN: ${{ env.TOKEN }}
+    decoded = json.loads(base64.urlsafe_b64decode(payload))
+    print(json.dumps(decoded, indent=2))
+    PY
+      env:
+        TOKEN: ${{ env.TOKEN }}
               
       # - name: Debug OIDC token
       #   run: |
