@@ -26,16 +26,16 @@ jobs:
           PAYLOAD=$(echo "$TOKEN" | cut -d '.' -f2)
 
           python3 - <<'PY'
-        import base64
-        import json
-        import os
+            import base64
+            import json
+            import os
 
-        payload = os.environ["PAYLOAD"]
-        payload += "=" * (-len(payload) % 4)
-        print(json.dumps(json.loads(base64.urlsafe_b64decode(payload)), indent=2))
-        PY
-          env:
-            PAYLOAD: ${{ env.PAYLOAD }}
+            payload = os.environ["PAYLOAD"]
+            payload += "=" * (-len(payload) % 4)
+            print(json.dumps(json.loads(base64.urlsafe_b64decode(payload)), indent=2))
+            PY
+              env:
+                PAYLOAD: ${{ env.PAYLOAD }}
               
       # - name: Debug OIDC token
       #   run: |
