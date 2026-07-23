@@ -33,15 +33,15 @@
 
 #           echo "Token received: ${#TOKEN} characters"
 
-- name: Decode OIDC Claims
-  shell: bash
-  run: |
-    TOKEN=$(curl -s \
-      -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-      "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
-      | jq -r '.value')
+  - name: Decode OIDC Claims
+    shell: bash
+    run: |
+      TOKEN=$(curl -s \
+        -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+        "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
+        | jq -r '.value')
 
-    PAYLOAD=$(echo "$TOKEN" | cut -d '.' -f2)
+      PAYLOAD=$(echo "$TOKEN" | cut -d '.' -f2)
 
     python3 -c "
       import base64, json
