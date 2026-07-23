@@ -21,24 +21,24 @@ jobs:
           curl -s "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
             -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" | jq -r '.claims'
 
-      # - name: Configure AWS Credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: arn:aws:iam::224761220970:role/github-actions-oidc-role
-      #     aws-region: us-east-1
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::224761220970:role/github-actions-oidc-role
+          aws-region: us-east-1
 
-      # - name: Terraform Init
-      #   run: terraform init
+      - name: Terraform Init
+        run: terraform init
 
-      # - name: Terraform Plan (Drift Check)
-      #   id: plan
-      #   run: |
-      #     terraform plan -no-color -detailed-exitcode > drift.txt
-      #     echo "exit_code=$?" >> $GITHUB_OUTPUT
+      - name: Terraform Plan (Drift Check)
+        id: plan
+        run: |
+          terraform plan -no-color -detailed-exitcode > drift.txt
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
 
-      # - name: Upload Drift File
-      #   if: steps.plan.outputs.exit_code == '2'
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: drift-output
-      #     path: drift.txt
+      - name: Upload Drift File
+        if: steps.plan.outputs.exit_code == '2'
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-output
+          path: drift.txt
