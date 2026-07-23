@@ -15,14 +15,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Debug OIDC token
+      
+      - name: Dump raw OIDC token
         run: |
-          echo "OIDC token claims:"
-          echo "URL: $ACTIONS_ID_TOKEN_REQUEST_URL"
-          echo "TOKEN: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+set}"
-          curl -s "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
-            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" | jq -r '.claims'
+          TOKEN=$(curl -s \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
+
+          echo "RAW TOKEN:"
+          echo "$TOKEN"
+
+      
+      # - name: Debug OIDC token
+      #   run: |
+      #     echo "OIDC token claims:"
+      #     echo "URL: $ACTIONS_ID_TOKEN_REQUEST_URL"
+      #     echo "TOKEN: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+set}"
+      #     curl -s "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
+      #       -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" | jq -r '.claims'
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
