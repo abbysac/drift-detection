@@ -1,13 +1,13 @@
 name: Drift Detection
 
 on:
-  schedule:
-    - cron: "0 */2 * * *"   # every 2 hours
-  workflow_dispatch:
+  push:
+    branches: [ "main" ]
 
 permissions:
   id-token: write
   contents: read
+
 
 jobs:
   drift:
