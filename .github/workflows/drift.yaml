@@ -1,79 +1,39 @@
-name: "Terraform Drift Detection"
+name: Drift Detection
 
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: "0 */2 * * *"   # every 2 hours
   workflow_dispatch:
 
 permissions:
-  id-token: write      
-  contents: read       
-  issues: write        
+  id-token: write
+  contents: read
 
 jobs:
-  drift-check:
-    name: "Detect Infrastructure Drift"
+  drift:
     runs-on: ubuntu-latest
-    
-    defaults:
-      run:
-        working-directory: ./terraform
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::224761220970:role/GitHubActionsOIDCRole
+          role-to-assume: arn:aws:iam::224761220970:role/github-actions-oidc-role
           aws-region: us-east-1
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.7.0
-          terraform_wrapper: false
 
       - name: Terraform Init
         run: terraform init
 
-      - name: Run Drift Check
-        id: drift
+      - name: Terraform Plan (Drift Check)
+        id: plan
         run: |
-          set +e
-          terraform plan -detailed-exitcode -no-color -out=tfplan
-          TF_EXIT_CODE=$?
-          echo "exit_code=$TF_EXIT_CODE" >> $GITHUB_OUTPUT
-          
-          if [ $TF_EXIT_CODE -eq 0 ]; then
-            echo "SUCCESS: No drift detected."
-            exit 0
-          elif [ $TF_EXIT_CODE -eq 2 ]; then
-            echo "WARNING: Infrastructure drift detected!"
-            exit 0
-          else
-            echo "ERROR: Terraform plan failed to execute correctly."
-            exit $TF_EXIT_CODE
-          fi
+          terraform plan -no-color -detailed-exitcode > drift.txt
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Issue on Drift
-        if: steps.drift.outputs.exit_code == '2'
-        uses: actions/github-script@v7
+      - name: Upload Drift File
+        if: steps.plan.outputs.exit_code == '2'
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const issueTitle = "⚠️ Terraform Drift Detected in Main Branch";
-            const issueBody = `Drift has been detected in the cloud infrastructure compared to the main branch configuration.
-            
-            **Workflow Run**: https://github.com{context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
-            
-            Please check the workflow output log above to identify which cloud components diverged. Run a manual \`terraform apply\` from an approved pipeline to resolve this drift.`;
-            
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: issueTitle,
-              body: issueBody,
-              labels: ['bug', 'drift-detected']
-            });
+          name: drift-output
+          path: drift.txt
