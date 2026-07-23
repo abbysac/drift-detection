@@ -1,16 +1,15 @@
-name: OIDC Test
+name: Guaranteed OIDC Test
 
 on:
   push:
     branches: [ "main" ]
 
-# MUST be top-level, not inside jobs:
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  oidc-test:
+  test-oidc:
     runs-on: ubuntu-latest
 
     steps:
@@ -30,7 +29,6 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::224761220970:role/github-actions-oidc-role
           aws-region: us-east-1
-          audience: sts.amazonaws.com
 
       - name: Verify caller identity
         run: aws sts get-caller-identity
