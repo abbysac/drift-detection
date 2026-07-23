@@ -29,7 +29,8 @@ resource "aws_iam_role" "github_actions_role" {
         Condition = {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com",
-            "token.actions.githubusercontent.com:sub" = "repo:abbysac/drift-detection:ref:refs/heads/main"
+            "token.actions.githubusercontent.com:sub" = "repo:abbysac@79344520/drift-detection@1307247485:ref:refs/heads/*"
+
           }
         }
       }
