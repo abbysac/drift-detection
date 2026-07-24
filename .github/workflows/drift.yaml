@@ -39,6 +39,9 @@ name: Guaranteed OIDC Test
 on:
   push:
 
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   debug:
@@ -47,6 +50,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Show GitHub Context
         run: |
           echo "Repository=${{ github.repository }}"
@@ -67,14 +71,4 @@ jobs:
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
             | jq -r '.value')
 
-          PAYLOAD=$(echo "$TOKEN" | cut -d '.' -f2)
-
-          python3 -c "
-    import base64
-    import json
-
-    payload = '$PAYLOAD'
-    payload += '=' * (-len(payload) % 4)
-
-    decoded = json.loads(base64.urlsafe_b64decode(payload))
-    print(json.dumps(decoded, indent=2))"
+          echo "$TOKEN" | cut -d '.' -f2 | tr '_-' '/+' | base64 -d | jq .
