@@ -45,5 +45,3 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - uses: github/actions-oidc-debugger@v1
