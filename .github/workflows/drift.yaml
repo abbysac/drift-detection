@@ -39,11 +39,6 @@ on:
   push:
     branches: [ "main" ]
 
-  name: Terraform Drift Detection
-
-on:
-  workflow_dispatch:
-
   schedule:
     - cron: "0 2 * * *"
 
