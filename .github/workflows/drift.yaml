@@ -70,11 +70,11 @@ jobs:
           PAYLOAD=$(echo "$TOKEN" | cut -d '.' -f2)
 
           python3 -c "
-import base64
-import json
+    import base64
+    import json
 
-payload = '$PAYLOAD'
-payload += '=' * (-len(payload) % 4)
+    payload = '$PAYLOAD'
+    payload += '=' * (-len(payload) % 4)
 
-decoded = json.loads(base64.urlsafe_b64decode(payload))
-print(json.dumps(decoded, indent=2))"
+    decoded = json.loads(base64.urlsafe_b64decode(payload))
+    print(json.dumps(decoded, indent=2))"
