@@ -112,10 +112,3 @@ jobs:
       - name: Show Plan
         if: steps.plan.outputs.exitcode == '2'
         run: terraform show -no-color tfplan
-
-# jobs:
-#   debug:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       - uses: actions/checkout@v4
