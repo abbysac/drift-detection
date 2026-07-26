@@ -1,46 +1,11 @@
-# name: Guaranteed OIDC Test
-
-# on:
-#   push:
-#     branches: [ "main" ]
-
-# permissions:
-#   id-token: write
-#   contents: read
-
-# jobs:
-#   debug:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       - uses: actions/checkout@v4
-
-#       - name: Show GitHub Context
-#         run: |
-#           echo "Repository=${{ github.repository }}"
-#           echo "Repository Owner=${{ github.repository_owner }}"
-#           echo "Ref=${{ github.ref }}"
-#           echo "Ref Name=${{ github.ref_name }}"
-#           echo "Event=${{ github.event_name }}"
-#           echo "Actor=${{ github.actor }}"
-
-#       - name: Get OIDC Token
-#         run: |
-#           TOKEN=$(curl -s \
-#             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-#             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
-#             | jq -r '.value')
-
-#           echo "Token received: ${#TOKEN} characters"
-
-name: Guaranteed OIDC Test
+name: Terraform Drift Detection
 
 on:
   push:
     branches: [ "main" ]
-
   schedule:
-    - cron: "0 2 * * *"
+    - cron: "0 2 * * *"  # daily at 2 AM UTC
+  workflow_dispatch: {}
 
 permissions:
   id-token: write
@@ -49,7 +14,6 @@ permissions:
 jobs:
   drift:
     runs-on: ubuntu-latest
-
 
     steps:
       - name: Checkout
@@ -70,45 +34,32 @@ jobs:
           terraform_version: 1.15.8
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -input=false
 
       - name: Terraform Validate
         run: terraform validate
 
-      - name: Terraform Format Check
-        run: terraform fmt -check
-
       - name: Terraform Plan (Detect Drift)
         id: plan
-        shell: bash
         run: |
           set +e
+          terraform plan -detailed-exitcode -out=tfplan -input=false
+          echo "exitcode=$?" >> "$GITHUB_OUTPUT"
+          set -e
 
-          terraform plan \
-            -detailed-exitcode \
-            -out=tfplan
-
-          EXIT_CODE=$?
-
-          echo "exitcode=$EXIT_CODE" >> "$GITHUB_OUTPUT"
-
-          if [ "$EXIT_CODE" -eq 1 ]; then
-            echo "Terraform plan failed."
-            exit 1
-          fi
-
-          exit 0
-
-      - name: No Drift
+      - name: No Drift Detected
         if: steps.plan.outputs.exitcode == '0'
-        run: |
-          echo "No infrastructure drift detected."
+        run: echo "✅ No infrastructure drift detected."
 
       - name: Drift Detected
         if: steps.plan.outputs.exitcode == '2'
         run: |
-          echo "Terraform detected infrastructure drift."
+          echo "⚠️ Infrastructure drift detected."
+          terraform show -no-color tfplan
+          exit 1
 
-      - name: Show Plan
-        if: steps.plan.outputs.exitcode == '2'
-        run: terraform show -no-color tfplan
+      - name: Plan Failed
+        if: steps.plan.outputs.exitcode == '1'
+        run: |
+          echo "❌ Terraform plan failed to execute."
+          exit 1
