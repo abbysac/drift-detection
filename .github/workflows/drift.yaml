@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # name: Guaranteed OIDC Test
 
 # on:
@@ -34,8 +33,6 @@
 
 #           echo "Token received: ${#TOKEN} characters"
 
-=======
->>>>>>> 4560fc03478a7107d9e4182dfe37cdc15cde97cc
 name: Terraform Drift Detection
 
 on:
@@ -54,11 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-<<<<<<< HEAD
-        working-directory: ./terraform   # <-- adjust to your actual path
-=======
         working-directory: ./terraform   # <-- adjust to your actual path #######
->>>>>>> 4560fc03478a7107d9e4182dfe37cdc15cde97cc
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -107,7 +100,6 @@ jobs:
         run: |
           echo "❌ Terraform plan failed to execute."
           exit 1
-<<<<<<< HEAD
     ##step that auto-generates the terraform import commands for whatever shows up as unmanaged
       - name: Install boto3
         run: pip install boto3
@@ -141,5 +133,3 @@ jobs:
         run: |
           echo "❌ Unmanaged AWS resources detected — see uploaded artifact for import commands."
           exit 1
-=======
->>>>>>> 4560fc03478a7107d9e4182dfe37cdc15cde97cc
