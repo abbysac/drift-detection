@@ -15,12 +15,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-       - name: Configure AWS Credentials
-         uses: aws-actions/configure-aws-credentials@v4
-         with:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
             role-to-assume: arn:aws:iam::224761220970:role/github-actions-oidc-role
             aws-region: us-east-1
             role-session-name: GitHubActions
