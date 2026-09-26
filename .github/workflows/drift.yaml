@@ -111,11 +111,6 @@ jobs:
         id: unmanaged_check
         continue-on-error: true
         run: python3 compare_drift.py --tf-state tfstate.json --region us-east-1 --out unmanaged.json
-
-      - name: Generate Import Commands for Unmanaged Resources
-        if: steps.unmanaged_check.outcome == 'failure'
-        run: python3 generate_import_commands.py --report unmanaged.json
-
       - name: Upload Unmanaged Resources Report
         if: steps.unmanaged_check.outcome == 'failure'
         uses: actions/upload-artifact@v4
