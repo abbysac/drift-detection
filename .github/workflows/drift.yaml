@@ -28,8 +28,8 @@ jobs:
         if: steps.plan.outputs.exitcode == '2'
         env:
           AWS_REGION: us-east-1
-          SES_FROM: ${{ abbysac@gmail.com }}
-          SES_TO: ${{ camleous@yahoo.com }}
+          SES_FROM: "abbysac@gmail.com"
+          SES_TO: "camleous@yahoo.com"
         run: |
           aws ses send-email \
             --region "us-east-1" \
