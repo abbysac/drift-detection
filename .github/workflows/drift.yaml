@@ -32,6 +32,7 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
+    
       - name: Terraform Plan
         id: plan
         working-directory: ./terraform
@@ -40,11 +41,14 @@ jobs:
         run: |
           set +e
 
-          terraform plan -detailed-exitcode -out=tfplan
+          terraform plan -detailed-exitcode -no-color > drift-plan.txt 2>&1
 
           EXIT_CODE=$?
 
           echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          # Show the plan in the GitHub Actions log
+          cat drift-plan.txt
 
           if [ "$EXIT_CODE" -eq 1 ]; then
             exit 1
@@ -52,30 +56,50 @@ jobs:
 
           exit 0
 
+      - name: Upload Terraform drift report
+        if: steps.plan.outputs.exit_code == '2'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-drift-report
+          path: terraform/drift-plan.txt
+
       - name: Send drift email
-        if: steps.plan.outputs.exitcode == '2'
+        if: steps.plan.outputs.exit_code == '2'
         env:
-          AWS_REGION: us-east-1
           SES_FROM: "abbysac@gmail.com"
           SES_TO: "camleous@yahoo.com"
         run: |
+          PLAN=$(cat terraform/drift-plan.txt)
+
+          python3 - "$PLAN" <<'PY' > /tmp/email.json
+          import json
+          import sys
+
+          plan = sys.argv[1]
+
+          message = {
+              "Subject": {
+                  "Data": "Terraform Drift Detected"
+              },
+              "Body": {
+                  "Text": {
+                      "Data": (
+                          "Terraform has detected drift in your AWS infrastructure.\n\n"
+                          "The following resources have changes:\n\n"
+                          "========================================\n"
+                          + plan +
+                          "\n========================================\n\n"
+                          "Review these changes and determine whether they were intentional."
+                      )
+                  }
+              }
+          }
+
+          print(json.dumps(message))
+          PY
+
           aws ses send-email \
             --region "us-east-1" \
             --from "$SES_FROM" \
             --destination "ToAddresses=$SES_TO" \
-            --message '{
-              "Subject": {
-                "Data": "Terraform Drift Detected"
-              },
-              "Body": {
-                "Text": {
-                  "Data": "Terraform has detected drift in your AWS infrastructure.\n\nReview the Terraform plan and determine whether the changes were intentional."
-                }
-              }
-            }'
-
-      - name: Fail if drift detected
-        if: steps.plan.outputs.exitcode == '2'
-        run: |
-          echo "Terraform drift detected!"
-          exit 2
+            --message file:///tmp/email.json
