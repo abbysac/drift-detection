@@ -6,34 +6,59 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write
   contents: read
+  id-token: write
 
 jobs:
   drift-detection:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      # ---------------------------------------------------------
+      # 1. Checkout repository
+      # ---------------------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ---------------------------------------------------------
+      # 2. Setup Terraform
+      # ---------------------------------------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      # ---------------------------------------------------------
+      # 3. Configure AWS credentials
+      # ---------------------------------------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::224761220970:role/github-actions-oidc-role
           aws-region: us-east-1
 
-      - name: Test AWS credentials
-        run: aws sts get-caller-identity
+      # ---------------------------------------------------------
+      # 4. Verify AWS authentication
+      # ---------------------------------------------------------
+      - name: Verify AWS identity
+        run: |
+          aws sts get-caller-identity
+
+      # ---------------------------------------------------------
+      # 5. Terraform Init
+      # ---------------------------------------------------------
       - name: Terraform Init
         working-directory: ./terraform
-        run: terraform init
+        run: |
+          terraform init
 
-    
-      - name: Terraform Plan
+      # ---------------------------------------------------------
+      # 6. Terraform Plan / Drift Detection
+      #
+      # Exit codes:
+      #   0 = No changes
+      #   1 = Terraform error
+      #   2 = Drift / changes detected
+      # ---------------------------------------------------------
+      - name: Terraform Drift Check
         id: plan
         working-directory: ./terraform
         continue-on-error: true
@@ -41,138 +66,153 @@ jobs:
         run: |
           set +e
 
-          terraform plan -detailed-exitcode -no-color > drift-plan.txt 2>&1
+          terraform plan \
+            -detailed-exitcode \
+            -no-color \
+            > drift-plan.txt 2>&1
 
           EXIT_CODE=$?
 
-          echo "Terraform exit code: $EXIT_CODE"
           echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          echo "=========================================="
+          echo "TERRAFORM PLAN"
+          echo "=========================================="
 
           cat drift-plan.txt
 
+          echo "=========================================="
+          echo "Terraform exit code: $EXIT_CODE"
+          echo "=========================================="
+
+          # Exit 0 here so the workflow can continue
+          # to the SES notification step.
           if [ "$EXIT_CODE" -eq 1 ]; then
             exit 1
           fi
 
           exit 0
 
-      - name: Check drift result
-        run: |
-          echo "Terraform plan exit code: '${{ steps.plan.outputs.exit_code }}'"
-
-      - name: Check drift report
+      # ---------------------------------------------------------
+      # 7. Display the saved drift plan
+      # ---------------------------------------------------------
+      - name: Show drift plan file
         if: steps.plan.outputs.exit_code == '2'
         run: |
-          echo "Drift detected!"
-          echo "Checking drift report..."
+          echo "=========================================="
+          echo "DRIFT DETECTED"
+          echo "=========================================="
 
-          ls -lah terraform/
+          echo ""
+          echo "Full Terraform plan:"
+          cat terraform/drift-plan.txt
 
-          if [ ! -f terraform/drift-plan.txt ]; then
-            echo "ERROR: drift-plan.txt does not exist!"
-            exit 1
-          fi
-
-          echo "drift-plan.txt exists."
-          echo "File size:"
-          wc -c terraform/drift-plan.txt
-
-      - name: Test SES
+      # ---------------------------------------------------------
+      # 8. Create SES email request
+      # ---------------------------------------------------------
+      - name: Prepare SES email
         if: steps.plan.outputs.exit_code == '2'
         env:
           SES_FROM: "abbysac@gmail.com"
           SES_TO: "camleous@yahoo.com"
         run: |
-          echo "======================================"
-          echo "TESTING SES"
-          echo "======================================"
-
-          echo "Sender: $SES_FROM"
-          echo "Recipient: $SES_TO"
-
-          echo "Testing AWS identity..."
-
-          aws sts get-caller-identity
-
-          echo "Testing SES..."
-
-          aws ses get-account-sending-enabled \
-            --region us-east-1
-
-          echo "Sending test email..."
-
-          aws ses send-email \
-            --region us-east-1 \
-            --from "$SES_FROM" \
-            --destination "ToAddresses=$SES_TO" \
-            --subject "Terraform Drift Test" \
-            --text "Terraform detected drift. This is a test email."
-
-          echo "======================================"
-          echo "SES TEST COMPLETED"
-          echo "======================================"
-
-      - name: Send detailed drift email
-        if: steps.plan.outputs.exit_code == '2'
-        env:
-          SES_FROM: "abbysac@gmail.com"
-          SES_TO: "camleous@yahoo.com"
-        run: |
-          echo "Sending detailed Terraform drift email..."
-
           python3 <<'PY'
           import json
+          import os
+          from pathlib import Path
 
-          with open("terraform/drift-plan.txt", "r") as f:
-              plan = f.read()
+          plan_file = Path("terraform/drift-plan.txt")
+
+          if not plan_file.exists():
+              raise SystemExit("ERROR: terraform/drift-plan.txt was not found")
+
+          plan = plan_file.read_text()
 
           body = f"""Terraform Drift Detected
 
-          AWS infrastructure differs from the Terraform configuration.
+          Terraform detected changes in your AWS infrastructure.
 
-          Terraform detected the following changes:
-
-          ========================================
+          Terraform Plan
+          ===============
 
           {plan}
 
-          ========================================
+          ===============
 
-          GitHub Actions Run:
-          https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-          Please review the changes before applying Terraform.
+          Review the changes above and determine whether they were intentional.
           """
 
-          message = {
-              "Subject": {
-                  "Data": "Terraform Drift Detected"
+          request = {
+              "Source": os.environ["SES_FROM"],
+              "Destination": {
+                  "ToAddresses": [
+                      os.environ["SES_TO"]
+                  ]
               },
-              "Body": {
-                  "Text": {
-                      "Data": body
+              "Message": {
+                  "Subject": {
+                      "Data": "Terraform Drift Detected",
+                      "Charset": "UTF-8"
+                  },
+                  "Body": {
+                      "Text": {
+                          "Data": body,
+                          "Charset": "UTF-8"
+                      }
                   }
               }
           }
 
-          with open("/tmp/ses-message.json", "w") as f:
-              json.dump(message, f)
+          Path("/tmp/ses-request.json").write_text(
+              json.dumps(request, indent=2)
+          )
 
-          print("SES JSON created.")
+          print("SES request created successfully.")
+          print("Plan size:", len(plan), "characters")
           PY
 
-          cat /tmp/ses-message.json
+      # ---------------------------------------------------------
+      # 9. Send SES notification
+      # ---------------------------------------------------------
+      - name: Send SES drift notification
+        if: steps.plan.outputs.exit_code == '2'
+        run: |
+          echo "=========================================="
+          echo "SENDING SES DRIFT NOTIFICATION"
+          echo "=========================================="
 
           aws ses send-email \
             --region us-east-1 \
-            --from "$SES_FROM" \
-            --destination "ToAddresses=$SES_TO" \
-            --message file:///tmp/ses-message.json
+            --cli-input-json file:///tmp/ses-request.json
 
-          echo "Detailed SES email sent."
+          echo "=========================================="
+          echo "SES EMAIL SENT"
+          echo "=========================================="
 
-      - name: Fail if drift detected
-        if: steps.plan.outputs.exit_code == '2'
+      # ---------------------------------------------------------
+      # 10. Report no drift
+      # ---------------------------------------------------------
+      - name: No drift detected
+        if: steps.plan.outputs.exit_code == '0'
         run: |
-          echo "Terraform drift detected!"
-          exit 2
+          echo "=========================================="
+          echo "NO DRIFT DETECTED"
+          echo "=========================================="
+          echo "Terraform infrastructure matches configuration."
+
+      # ---------------------------------------------------------
+      # 11. Report Terraform error
+      # ---------------------------------------------------------
+      - name: Terraform plan failed
+        if: steps.plan.outputs.exit_code == '1'
+        run: |
+          echo "=========================================="
+          echo "TERRAFORM PLAN FAILED"
+          echo "=========================================="
+
+          echo "Terraform encountered an error."
+          echo ""
+          echo "Plan output:"
+          cat terraform/drift-plan.txt
+
+          exit 1
