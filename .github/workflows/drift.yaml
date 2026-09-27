@@ -63,19 +63,55 @@ jobs:
           name: terraform-drift-report
           path: terraform/drift-plan.txt
 
+      - name: Verify SES configuration
+        if: steps.plan.outputs.exit_code == '2'
+        env:
+         SES_FROM: "abbysac@gmail.com"
+         SES_TO: "camleous@yahoo.com"
+        run: |
+          echo "SES region: us-east-1"
+          echo "SES sender: $SES_FROM"
+          echo "SES recipient: $SES_TO"
+
+          echo "Checking SES identity..."
+
+          aws ses get-identity-verification-attributes \
+            --region us-east-1 \
+            --identities "$SES_FROM" "$SES_TO"
+
       - name: Send drift email
         if: steps.plan.outputs.exit_code == '2'
         env:
-          SES_FROM: "abbysac@gmail.com"
-          SES_TO: "camleous@yahoo.com"
+         SES_FROM: "abbysac@gmail.com"
+         SES_TO: "camleous@yahoo.com"
         run: |
-          PLAN=$(cat terraform/drift-plan.txt)
+          echo "Preparing Terraform drift email..."
 
-          python3 - "$PLAN" <<'PY' > /tmp/email.json
+          if [ ! -f terraform/drift-plan.txt ]; then
+            echo "ERROR: drift-plan.txt was not found!"
+            exit 1
+          fi
+
+          echo "Drift report found:"
+          ls -lh terraform/drift-plan.txt
+
+          python3 <<'PY'
           import json
-          import sys
 
-          plan = sys.argv[1]
+          with open("terraform/drift-plan.txt", "r") as f:
+              plan = f.read()
+
+          body = (
+              "Terraform Drift Detected\n\n"
+              "AWS infrastructure differs from the Terraform configuration.\n\n"
+              "The following Terraform plan shows the detected changes:\n\n"
+              "==================================================\n\n"
+              + plan +
+              "\n\n==================================================\n\n"
+              "Please review these changes and determine whether they were intentional.\n\n"
+              "GitHub Actions run:\n"
+              "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\n"
+          )
 
           message = {
               "Subject": {
@@ -83,23 +119,24 @@ jobs:
               },
               "Body": {
                   "Text": {
-                      "Data": (
-                          "Terraform has detected drift in your AWS infrastructure.\n\n"
-                          "The following resources have changes:\n\n"
-                          "========================================\n"
-                          + plan +
-                          "\n========================================\n\n"
-                          "Review these changes and determine whether they were intentional."
-                      )
+                      "Data": body
                   }
               }
           }
 
-          print(json.dumps(message))
+          with open("/tmp/ses-message.json", "w") as f:
+              json.dump(message, f)
+
+          print("SES message created successfully.")
+          print("Email body length:", len(body))
           PY
 
+          echo "Sending email through Amazon SES..."
+
           aws ses send-email \
-            --region "us-east-1" \
+            --region us-east-1 \
             --from "$SES_FROM" \
             --destination "ToAddresses=$SES_TO" \
-            --message file:///tmp/email.json
+            --message file:///tmp/ses-message.json
+
+          echo "✅ SES email sent successfully."
