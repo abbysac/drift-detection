@@ -50,169 +50,232 @@ jobs:
         run: |
           terraform init
 
-      # ---------------------------------------------------------
-      # 6. Terraform Plan / Drift Detection
-      #
-      # Exit codes:
-      #   0 = No changes
-      #   1 = Terraform error
-      #   2 = Drift / changes detected
-      # ---------------------------------------------------------
       - name: Terraform Drift Check
         id: plan
         working-directory: ./terraform
-        continue-on-error: true
         shell: bash
         run: |
           set +e
 
-          terraform plan \
-            -detailed-exitcode \
-            -no-color \
-            > drift-plan.txt 2>&1
+              echo "=========================================="
+              echo "RUNNING TERRAFORM PLAN"
+              echo "=========================================="
 
-          EXIT_CODE=$?
+              terraform plan \
+                -detailed-exitcode \
+                -no-color \
+                > drift-plan.txt 2>&1
 
-          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+              TERRAFORM_EXIT_CODE=$?
 
-          echo "=========================================="
-          echo "TERRAFORM PLAN"
-          echo "=========================================="
+              echo ""
+              echo "=========================================="
+              echo "TERRAFORM PLAN OUTPUT"
+              echo "=========================================="
 
-          cat drift-plan.txt
+              cat drift-plan.txt
 
-          echo "=========================================="
-          echo "Terraform exit code: $EXIT_CODE"
-          echo "=========================================="
+              echo ""
+              echo "Terraform raw exit code: $TERRAFORM_EXIT_CODE"
 
-          # Exit 0 here so the workflow can continue
-          # to the SES notification step.
-          if [ "$EXIT_CODE" -eq 1 ]; then
-            exit 1
-          fi
+              # -----------------------------------------------------
+              # Detect actual infrastructure changes from the plan.
+              #
+              # Terraform's output contains:
+              #
+              # Plan: 0 to add, 1 to change, 0 to destroy.
+              #
+              # Any non-zero add/change/destroy means drift exists.
+              # -----------------------------------------------------
 
-          exit 0
+              if grep -Eq 'Plan: [1-9][0-9]* to add, [0-9]+ to change, [0-9]+ to destroy|Plan: [0-9]+ to add, [1-9][0-9]* to change, [0-9]+ to destroy|Plan: [0-9]+ to add, [0-9]+ to change, [1-9][0-9]* to destroy' drift-plan.txt; then
 
-      # ---------------------------------------------------------
-      # 7. Display the saved drift plan
-      # ---------------------------------------------------------
-      - name: Show drift plan file
-        if: steps.plan.outputs.exit_code == '2'
-        run: |
-          echo "=========================================="
-          echo "DRIFT DETECTED"
-          echo "=========================================="
+                echo "DRIFT DETECTED"
 
-          echo ""
-          echo "Full Terraform plan:"
-          cat terraform/drift-plan.txt
+                echo "drift_detected=true" >> "$GITHUB_OUTPUT"
+                echo "exit_code=2" >> "$GITHUB_OUTPUT"
 
-      # ---------------------------------------------------------
-      # 8. Create SES email request
-      # ---------------------------------------------------------
-      - name: Prepare SES email
-        if: steps.plan.outputs.exit_code == '2'
-        env:
-          SES_FROM: "abbysac@gmail.com"
-          SES_TO: "camleous@yahoo.com"
-        run: |
-          python3 <<'PY'
-          import json
-          import os
-          from pathlib import Path
+              elif [ "$TERRAFORM_EXIT_CODE" -eq 1 ]; then
 
-          plan_file = Path("terraform/drift-plan.txt")
+                echo "TERRAFORM ERROR"
 
-          if not plan_file.exists():
-              raise SystemExit("ERROR: terraform/drift-plan.txt was not found")
+                echo "drift_detected=false" >> "$GITHUB_OUTPUT"
+                echo "exit_code=1" >> "$GITHUB_OUTPUT"
 
-          plan = plan_file.read_text()
+                exit 1
 
-          body = f"""Terraform Drift Detected
+              else
 
-          Terraform detected changes in your AWS infrastructure.
+                echo "NO DRIFT DETECTED"
 
-          Terraform Plan
-          ===============
+                echo "drift_detected=false" >> "$GITHUB_OUTPUT"
+                echo "exit_code=0" >> "$GITHUB_OUTPUT"
 
-          {plan}
+              fi
 
-          ===============
+              echo ""
+              echo "=========================================="
+              echo "FINAL DRIFT STATUS"
+              echo "=========================================="
 
-          Review the changes above and determine whether they were intentional.
-          """
+              echo "Terraform raw exit code: $TERRAFORM_EXIT_CODE"
+              echo "Drift detected: $(grep -E '^drift_detected=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)"
 
-          request = {
-              "Source": os.environ["SES_FROM"],
-              "Destination": {
-                  "ToAddresses": [
-                      os.environ["SES_TO"]
-                  ]
-              },
-              "Message": {
-                  "Subject": {
-                      "Data": "Terraform Drift Detected",
-                      "Charset": "UTF-8"
+          # ---------------------------------------------------------
+          # 7. Display drift information
+          # ---------------------------------------------------------
+          - name: Display detected drift
+            if: steps.plan.outputs.drift_detected == 'true'
+            run: |
+              echo "=========================================="
+              echo "AWS DRIFT DETECTED"
+              echo "=========================================="
+
+              echo ""
+              echo "Changed resources:"
+              grep -E '^  # .* will be ' terraform/drift-plan.txt || true
+
+              echo ""
+              echo "Terraform summary:"
+              grep -E '^Plan:' terraform/drift-plan.txt || true
+
+              echo ""
+              echo "Full plan:"
+              cat terraform/drift-plan.txt
+
+          # ---------------------------------------------------------
+          # 8. Prepare SES email
+          # ---------------------------------------------------------
+          - name: Prepare SES email
+            if: steps.plan.outputs.drift_detected == 'true'
+            env:
+              SES_FROM: "abbysac@gmail.com"
+              SES_TO: "camleous@yahoo.com"
+            run: |
+              python3 <<'PY'
+              import json
+              import os
+              from pathlib import Path
+
+              plan_file = Path("terraform/drift-plan.txt")
+
+              if not plan_file.exists():
+                  raise SystemExit(
+                      "ERROR: terraform/drift-plan.txt was not found"
+                  )
+
+              plan = plan_file.read_text()
+
+              # Extract changed resources
+              changed_resources = []
+
+              for line in plan.splitlines():
+                  stripped = line.strip()
+
+                  if stripped.startswith("# ") and " will be " in stripped:
+                      changed_resources.append(stripped[2:])
+
+              if changed_resources:
+                  resource_summary = "\n".join(
+                      f"- {resource}" for resource in changed_resources
+                  )
+              else:
+                  resource_summary = "- Terraform detected infrastructure changes."
+
+              body = f"""Terraform Drift Detected
+
+              Terraform has detected changes in your AWS infrastructure.
+
+              Changed Resource(s)
+              ===================
+
+              {resource_summary}
+
+              Terraform Plan
+              ===============
+
+              {plan}
+
+              ===============================
+
+              Please review the Terraform plan and determine whether
+              these infrastructure changes were intentional.
+              """
+
+              request = {
+                  "Source": os.environ["SES_FROM"],
+                  "Destination": {
+                      "ToAddresses": [
+                          os.environ["SES_TO"]
+                      ]
                   },
-                  "Body": {
-                      "Text": {
-                          "Data": body,
+                  "Message": {
+                      "Subject": {
+                          "Data": "Terraform Drift Detected",
                           "Charset": "UTF-8"
+                      },
+                      "Body": {
+                          "Text": {
+                              "Data": body,
+                              "Charset": "UTF-8"
+                          }
                       }
                   }
               }
-          }
 
-          Path("/tmp/ses-request.json").write_text(
-              json.dumps(request, indent=2)
-          )
+              Path("/tmp/ses-request.json").write_text(
+                  json.dumps(request, indent=2)
+              )
 
-          print("SES request created successfully.")
-          print("Plan size:", len(plan), "characters")
-          PY
+              print("SES request prepared successfully.")
+              print("Plan size:", len(plan), "characters")
+              print("Changed resources:")
 
-      # ---------------------------------------------------------
-      # 9. Send SES notification
-      # ---------------------------------------------------------
-      - name: Send SES drift notification
-        if: steps.plan.outputs.exit_code == '2'
-        run: |
-          echo "=========================================="
-          echo "SENDING SES DRIFT NOTIFICATION"
-          echo "=========================================="
+              for resource in changed_resources:
+                  print(resource)
+              PY
 
-          aws ses send-email \
-            --region us-east-1 \
-            --cli-input-json file:///tmp/ses-request.json
+          # ---------------------------------------------------------
+          # 9. Send SES notification
+          # ---------------------------------------------------------
+          - name: Send SES drift notification
+            if: steps.plan.outputs.drift_detected == 'true'
+            run: |
+              echo "=========================================="
+              echo "SENDING SES DRIFT EMAIL"
+              echo "=========================================="
 
-          echo "=========================================="
-          echo "SES EMAIL SENT"
-          echo "=========================================="
+              aws ses send-email \
+                --region us-east-1 \
+                --cli-input-json file:///tmp/ses-request.json
 
-      # ---------------------------------------------------------
-      # 10. Report no drift
-      # ---------------------------------------------------------
-      - name: No drift detected
-        if: steps.plan.outputs.exit_code == '0'
-        run: |
-          echo "=========================================="
-          echo "NO DRIFT DETECTED"
-          echo "=========================================="
-          echo "Terraform infrastructure matches configuration."
+              echo ""
+              echo "=========================================="
+              echo "SES EMAIL SENT SUCCESSFULLY"
+              echo "=========================================="
 
-      # ---------------------------------------------------------
-      # 11. Report Terraform error
-      # ---------------------------------------------------------
-      - name: Terraform plan failed
-        if: steps.plan.outputs.exit_code == '1'
-        run: |
-          echo "=========================================="
-          echo "TERRAFORM PLAN FAILED"
-          echo "=========================================="
+          # ---------------------------------------------------------
+          # 10. No drift
+          # ---------------------------------------------------------
+          - name: No drift detected
+            if: steps.plan.outputs.drift_detected == 'false' && steps.plan.outputs.exit_code == '0'
+            run: |
+              echo "=========================================="
+              echo "NO DRIFT DETECTED"
+              echo "=========================================="
 
-          echo "Terraform encountered an error."
-          echo ""
-          echo "Plan output:"
-          cat terraform/drift-plan.txt
+              echo "Terraform configuration matches AWS infrastructure."
 
-          exit 1
+          # ---------------------------------------------------------
+          # 11. Terraform error
+          # ---------------------------------------------------------
+          - name: Terraform error
+            if: steps.plan.outputs.exit_code == '1'
+            run: |
+              echo "=========================================="
+              echo "TERRAFORM PLAN FAILED"
+              echo "=========================================="
+
+              cat terraform/drift-plan.txt
+
+              exit 1 
