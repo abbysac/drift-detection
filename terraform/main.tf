@@ -83,7 +83,8 @@ resource "aws_iam_policy" "github_actions_policy" {
           "iam:GetPolicy",
           "iam:ListAttachedRolePolicies",
           "iam:ListRolePolicies",
-          "iam:GetPolicyVersion"
+          "iam:GetPolicyVersion",
+          "ses:SendEmail"
         ]
         Resource = "*"
       }
