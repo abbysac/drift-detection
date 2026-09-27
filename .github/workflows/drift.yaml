@@ -16,13 +16,25 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init
-        run: terraform init
-
       - name: Terraform Plan
         id: plan
+        working-directory: ./terraform
         continue-on-error: true
-        run: terraform plan -detailed-exitcode -out=tfplan
+        shell: bash
+        run: |
+          set +e
+
+          terraform plan -detailed-exitcode -out=tfplan
+
+          EXIT_CODE=$?
+
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          if [ "$EXIT_CODE" -eq 1 ]; then
+            exit 1
+          fi
+
+          exit 0
 
       - name: Send drift email
         if: steps.plan.outputs.exitcode == '2'
