@@ -233,7 +233,7 @@ jobs:
 
               for resource in changed_resources:
                   print(resource)
-              PY
+              print("SES request JSON written to /tmp/ses-request.json")
 
           # ---------------------------------------------------------
           # 9. Send SES notification
