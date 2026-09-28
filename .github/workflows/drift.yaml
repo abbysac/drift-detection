@@ -153,129 +153,129 @@ jobs:
               SES_TO: "camleous@yahoo.com"
             run: |
               python3 <<'PY'
-              import json
-              import os
-              from pathlib import Path
+                import json
+                import os
+                from pathlib import Path
 
-              plan_file = Path("terraform/drift-plan.txt")
+                plan_file = Path("terraform/drift-plan.txt")
 
-              if not plan_file.exists():
-                  raise SystemExit(
-                      "ERROR: terraform/drift-plan.txt was not found"
-                  )
+                if not plan_file.exists():
+                    raise SystemExit(
+                        "ERROR: terraform/drift-plan.txt was not found"
+                    )
 
-              plan = plan_file.read_text()
+                plan = plan_file.read_text()
 
-              # Extract changed resources
-              changed_resources = []
+                # Extract changed resources
+                changed_resources = []
 
-              for line in plan.splitlines():
-                  stripped = line.strip()
+                for line in plan.splitlines():
+                    stripped = line.strip()
 
-                  if stripped.startswith("# ") and " will be " in stripped:
-                      changed_resources.append(stripped[2:])
+                    if stripped.startswith("# ") and " will be " in stripped:
+                        changed_resources.append(stripped[2:])
 
-              if changed_resources:
-                  resource_summary = "\n".join(
-                      f"- {resource}" for resource in changed_resources
-                  )
-              else:
-                  resource_summary = "- Terraform detected infrastructure changes."
+                if changed_resources:
+                    resource_summary = "\n".join(
+                        f"- {resource}" for resource in changed_resources
+                    )
+                else:
+                    resource_summary = "- Terraform detected infrastructure changes."
 
-              body = f"""Terraform Drift Detected
+                body = f"""Terraform Drift Detected
 
-              Terraform has detected changes in your AWS infrastructure.
+                Terraform has detected changes in your AWS infrastructure.
 
-              Changed Resource(s)
-              ===================
+                Changed Resource(s)
+                ===================
 
-              {resource_summary}
+                {resource_summary}
 
-              Terraform Plan
-              ===============
+                Terraform Plan
+                ===============
 
-              {plan}
+                {plan}
 
-              ===============================
+                ===============================
 
-              Please review the Terraform plan and determine whether
-              these infrastructure changes were intentional.
-              """
+                Please review the Terraform plan and determine whether
+                these infrastructure changes were intentional.
+                """
 
-              request = {
-                  "Source": os.environ["SES_FROM"],
-                  "Destination": {
-                      "ToAddresses": [
-                          os.environ["SES_TO"]
-                      ]
-                  },
-                  "Message": {
-                      "Subject": {
-                          "Data": "Terraform Drift Detected",
-                          "Charset": "UTF-8"
-                      },
-                      "Body": {
-                          "Text": {
-                              "Data": body,
-                              "Charset": "UTF-8"
-                          }
-                      }
-                  }
-              }
+                request = {
+                    "Source": os.environ["SES_FROM"],
+                    "Destination": {
+                        "ToAddresses": [
+                            os.environ["SES_TO"]
+                        ]
+                    },
+                    "Message": {
+                        "Subject": {
+                            "Data": "Terraform Drift Detected",
+                            "Charset": "UTF-8"
+                        },
+                        "Body": {
+                            "Text": {
+                                "Data": body,
+                                "Charset": "UTF-8"
+                            }
+                        }
+                    }
+                }
 
-              Path("/tmp/ses-request.json").write_text(
-                  json.dumps(request, indent=2)
-              )
+                Path("/tmp/ses-request.json").write_text(
+                    json.dumps(request, indent=2)
+                )
 
-              print("SES request prepared successfully.")
-              print("Plan size:", len(plan), "characters")
-              print("Changed resources:")
+                print("SES request prepared successfully.")
+                print("Plan size:", len(plan), "characters")
+                print("Changed resources:")
 
-              for resource in changed_resources:
-                  print(resource)
-              print("SES request JSON written to /tmp/ses-request.json")
+                for resource in changed_resources:
+                    print(resource)
+                print("SES request JSON written to /tmp/ses-request.json")
 
-          # ---------------------------------------------------------
-          # 9. Send SES notification
-          # ---------------------------------------------------------
-          - name: Send SES drift notification
-            if: steps.plan.outputs.drift_detected == 'true'
-            run: |
-              echo "=========================================="
-              echo "SENDING SES DRIFT EMAIL"
-              echo "=========================================="
+            # ---------------------------------------------------------
+            # 9. Send SES notification
+            # ---------------------------------------------------------
+            - name: Send SES drift notification
+              if: steps.plan.outputs.drift_detected == 'true'
+              run: |
+                echo "=========================================="
+                echo "SENDING SES DRIFT EMAIL"
+                echo "=========================================="
 
-              aws ses send-email \
-                --region us-east-1 \
-                --cli-input-json file:///tmp/ses-request.json
+                aws ses send-email \
+                  --region us-east-1 \
+                  --cli-input-json file:///tmp/ses-request.json
 
-              echo ""
-              echo "=========================================="
-              echo "SES EMAIL SENT SUCCESSFULLY"
-              echo "=========================================="
+                echo ""
+                echo "=========================================="
+                echo "SES EMAIL SENT SUCCESSFULLY"
+                echo "=========================================="
 
-          # ---------------------------------------------------------
-          # 10. No drift
-          # ---------------------------------------------------------
-          - name: No drift detected
-            if: steps.plan.outputs.drift_detected == 'false' && steps.plan.outputs.exit_code == '0'
-            run: |
-              echo "=========================================="
-              echo "NO DRIFT DETECTED"
-              echo "=========================================="
+            # ---------------------------------------------------------
+            # 10. No drift
+            # ---------------------------------------------------------
+            - name: No drift detected
+              if: steps.plan.outputs.drift_detected == 'false' && steps.plan.outputs.exit_code == '0'
+              run: |
+                echo "=========================================="
+                echo "NO DRIFT DETECTED"
+                echo "=========================================="
 
-              echo "Terraform configuration matches AWS infrastructure."
+                echo "Terraform configuration matches AWS infrastructure."
 
-          # ---------------------------------------------------------
-          # 11. Terraform error
-          # ---------------------------------------------------------
-          - name: Terraform error
-            if: steps.plan.outputs.exit_code == '1'
-            run: |
-              echo "=========================================="
-              echo "TERRAFORM PLAN FAILED"
-              echo "=========================================="
+            # ---------------------------------------------------------
+            # 11. Terraform error
+            # ---------------------------------------------------------
+            - name: Terraform error
+              if: steps.plan.outputs.exit_code == '1'
+              run: |
+                echo "=========================================="
+                echo "TERRAFORM PLAN FAILED"
+                echo "=========================================="
 
-              cat terraform/drift-plan.txt
+                cat terraform/drift-plan.txt
 
-              exit 1
+                exit 1
