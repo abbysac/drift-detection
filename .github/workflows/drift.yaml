@@ -153,9 +153,9 @@ jobs:
               SES_TO: "camleous@yahoo.com"
             run: |
               python3 <<'PY'
-                import json
-                import os
-                from pathlib import Path
+              import json
+              import os
+              from pathlib import Path
 
                 plan_file = Path("terraform/drift-plan.txt")
 
@@ -235,47 +235,47 @@ jobs:
                     print(resource)
                 print("SES request JSON written to /tmp/ses-request.json")
 
-            # ---------------------------------------------------------
-            # 9. Send SES notification
-            # ---------------------------------------------------------
-            - name: Send SES drift notification
-              if: steps.plan.outputs.drift_detected == 'true'
-              run: |
-                echo "=========================================="
-                echo "SENDING SES DRIFT EMAIL"
-                echo "=========================================="
+          # ---------------------------------------------------------
+          # 9. Send SES notification
+          # ---------------------------------------------------------
+          - name: Send SES drift notification
+            if: steps.plan.outputs.drift_detected == 'true'
+            run: |
+              echo "=========================================="
+              echo "SENDING SES DRIFT EMAIL"
+              echo "=========================================="
 
-                aws ses send-email \
-                  --region us-east-1 \
-                  --cli-input-json file:///tmp/ses-request.json
+              aws ses send-email \
+                --region us-east-1 \
+                --cli-input-json file:///tmp/ses-request.json
 
-                echo ""
-                echo "=========================================="
-                echo "SES EMAIL SENT SUCCESSFULLY"
-                echo "=========================================="
+              echo ""
+              echo "=========================================="
+              echo "SES EMAIL SENT SUCCESSFULLY"
+              echo "=========================================="
 
-            # ---------------------------------------------------------
-            # 10. No drift
-            # ---------------------------------------------------------
-            - name: No drift detected
-              if: steps.plan.outputs.drift_detected == 'false' && steps.plan.outputs.exit_code == '0'
-              run: |
-                echo "=========================================="
-                echo "NO DRIFT DETECTED"
-                echo "=========================================="
+          # ---------------------------------------------------------
+          # 10. No drift
+          # ---------------------------------------------------------
+          - name: No drift detected
+            if: steps.plan.outputs.drift_detected == 'false' && steps.plan.outputs.exit_code == '0'
+            run: |
+              echo "=========================================="
+              echo "NO DRIFT DETECTED"
+              echo "=========================================="
 
-                echo "Terraform configuration matches AWS infrastructure."
+              echo "Terraform configuration matches AWS infrastructure."
 
-            # ---------------------------------------------------------
-            # 11. Terraform error
-            # ---------------------------------------------------------
-            - name: Terraform error
-              if: steps.plan.outputs.exit_code == '1'
-              run: |
-                echo "=========================================="
-                echo "TERRAFORM PLAN FAILED"
-                echo "=========================================="
+          # ---------------------------------------------------------
+          # 11. Terraform error
+          # ---------------------------------------------------------
+          - name: Terraform error
+            if: steps.plan.outputs.exit_code == '1'
+            run: |
+              echo "=========================================="
+              echo "TERRAFORM PLAN FAILED"
+              echo "=========================================="
 
-                cat terraform/drift-plan.txt
+              cat terraform/drift-plan.txt
 
-                exit 1
+              exit 1
