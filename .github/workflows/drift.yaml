@@ -159,7 +159,7 @@ jobs:
 
               plan_file = Path("terraform/drift-plan.txt")
 
-                if not plan_file.exists():
+              if not plan_file.exists():
                   raise SystemExit(
                       "ERROR: terraform/drift-plan.txt was not found"
                   )
@@ -167,31 +167,31 @@ jobs:
               plan = plan_file.read_text()
 
               # Extract changed resources
-                changed_resources = []
+              changed_resources = []
 
               for line in plan.splitlines():
                   stripped = line.strip()
 
                   if stripped.startswith("# ") and " will be " in stripped:
-                    changed_resources.append(stripped[2:])
+                      changed_resources.append(stripped[2:])
 
-                if changed_resources:
+              if changed_resources:
                   resource_summary = "\n".join(
                       f"- {resource}" for resource in changed_resources
                   )
-                else:
+              else:
                   resource_summary = "- Terraform detected infrastructure changes."
 
-                body = f"""Terraform Drift Detected
+              body = f"""Terraform Drift Detected
 
               Terraform has detected changes in your AWS infrastructure.
 
               Changed Resource(s)
-                ===================
+              ===================
 
               {resource_summary}
 
-                Terraform Plan
+              Terraform Plan
               ===============
 
               {plan}
@@ -200,7 +200,7 @@ jobs:
 
               Please review the Terraform plan and determine whether
               these infrastructure changes were intentional.
-                """
+              """
 
               request = {
                   "Source": os.environ["SES_FROM"],
@@ -223,17 +223,17 @@ jobs:
                   }
               }
 
-                  Path("/tmp/ses-request.json").write_text(
-                    json.dumps(request, indent=2)
-                  )
+              Path("/tmp/ses-request.json").write_text(
+                  json.dumps(request, indent=2)
+              )
 
-                  print("SES request prepared successfully.")
-                  print("Plan size:", len(plan), "characters")
-                  print("Changed resources:")
+              print("SES request prepared successfully.")
+              print("Plan size:", len(plan), "characters")
+              print("Changed resources:")
 
-                  for resource in changed_resources:
-                    print(resource)
-                  PY
+              for resource in changed_resources:
+                  print(resource)
+              PY
 
           # ---------------------------------------------------------
           # 9. Send SES notification
@@ -278,4 +278,4 @@ jobs:
 
               cat terraform/drift-plan.txt
 
-              exit 1 
+              exit 1
